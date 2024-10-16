@@ -9,9 +9,9 @@ import json
 
 # Conectar a la base de datos
 conexion = mysql.connect(
-    host="localhost",
-    user="root",
-    password="",
+    host="rrhh.cnkwwe420aze.us-east-2.rds.amazonaws.com",
+    user="Admin",
+    password="Admin2024$",
     database="rrhh"
 )
 cursor = conexion.cursor()

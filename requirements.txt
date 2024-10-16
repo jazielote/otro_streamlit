@@ -1,0 +1,8 @@
+streamlit
+mysql.connector
+uuid
+streamlit_calendar
+smtplib
+email.message
+ssl
+json

@@ -10,13 +10,13 @@ if "vacante_form" not in st.session_state:
 
 # Conectar a la base de datos
 try:
-conexion = mysql.connect(
-    host="rrhh.cnkwwe420aze.us-east-2.rds.amazonaws.com",
-    user="admin",
-    password="Admin2024$",
-    database="rrhh",
-    port=3306
-)
+    conexion = mysql.connect(
+        host="rrhh.cnkwwe420aze.us-east-2.rds.amazonaws.com",
+        user="admin",
+        password="Admin2024$",
+        database="rrhh",
+        port=3306
+    )
     cursor = conexion.cursor()
 except mysql.Error as err:
     st.error(f"Error al conectar a la base de datos: {err}")

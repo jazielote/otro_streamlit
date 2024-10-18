@@ -10,9 +10,10 @@ import json
 # Conectar a la base de datos
 conexion = mysql.connect(
     host="rrhh.cnkwwe420aze.us-east-2.rds.amazonaws.com",
-    user="Admin",
+    user="admin",
     password="Admin2024$",
-    database="rrhh"
+    database="rrhh",
+    port=3306
 )
 cursor = conexion.cursor()
 
@@ -271,6 +272,123 @@ def configurarEmail():
     # v== la informacion parte 2
     st.info("Recomendación: Deberias utilizar un correo profesional exclusivo para el envío de E-mails automatizado.\nDebes configurar una contraseña de aplicación en dicho correo.")
 
+def seguimientoCandidatos():
+    try:
+        st.title("Seguimiento de candidatos")
+        
+        # Consulta para obtener las vacantes del usuario
+        try :
+            cursor.execute("SELECT * FROM vacantes WHERE iduser = %s", (st.session_state["userid"],))
+            vacantes = cursor.fetchall()
+        except mysql.connector.Error as err:
+            st.error(f"Error fetching vacantes: {err}")
+            return
+        
+        # Verificar si la columna "calificación" existe en la tabla "postulaciones"
+        try:
+            cursor.execute("SHOW COLUMNS FROM postulaciones LIKE 'calificación'")
+            if cursor.fetchone() is None:
+                cursor.execute("ALTER TABLE postulaciones ADD COLUMN calificación INT")
+        except mysql.connector.Error as err:
+            st.error(f"Error altering table postulaciones: {err}")
+            return
+        
+        with st.container(border=True):
+            # Cuadro de selección con los datos obtenidos
+            vacante_options = [f"{vacante[2].capitalize()}" for vacante in vacantes]
+            vacante_select = st.selectbox("Vacante seleccionada", ["Ninguno"] + vacante_options)
+
+            if vacante_select == "Ninguno":
+                st.error("No hay vacantes seleccionadas")
+                return
+
+            # Obteniendo el id de la vacante seleccionada
+            vacante_id = [vacante[0] for vacante in vacantes if f"{vacante[2].capitalize()}" == vacante_select][0]
+
+            # Obteniendo el título y el salario de la vacante seleccionada
+            try:
+                cursor.execute("SELECT * FROM vacantes WHERE id = %s", (vacante_id,))
+                vacante_info = cursor.fetchone()
+                titulo = vacante_info[2]
+                salario = vacante_info[5]
+            except mysql.connector.Error as err:
+                st.error(f"Error fetching vacante info: {err}")
+                return
+
+            # Mostrando el título y el salario de la vacante seleccionada
+            st.write(f"**Vacante:** {titulo.capitalize()}")
+            st.write(f"**Salario:** {salario}$")
+
+            # Ejecutando la consulta para obtener los postulantes de la vacante seleccionada
+            try:
+                cursor.execute("SELECT * FROM postulaciones WHERE vacante_id = %s", (vacante_id,))
+                postulantes = cursor.fetchall()
+            except mysql.connector.Error as err:
+                st.error(f"Error fetching postulantes: {err}")
+                return
+
+            # Creando un cuadro de selección con los postulantes
+            postulante_options = [f"{postulante[2].capitalize()}" for postulante in postulantes]
+            postulante_select = st.selectbox("Postulante seleccionado", ["Ninguno"] + postulante_options)
+
+            if postulante_select == "Ninguno":
+                st.error("No hay postulantes seleccionados")
+                return
+            else: 
+                # Mostrando la información del postulante seleccionado
+                postulante_id = [postulante[0] for postulante in postulantes if f"{postulante[2].capitalize()}" == postulante_select][0]
+                try:
+                    cursor.execute("SELECT * FROM postulaciones WHERE id = %s", (postulante_id,))
+                    postulante_info = cursor.fetchone()
+                    st.write(f"**Nombre completo:** {postulante_info[2].capitalize()}")
+                    st.write(f"**Correo electrónico:** {postulante_info[3]}")
+                    st.write(f"**Teléfono:** {postulante_info[4]}")
+                except mysql.connector.Error as err:
+                    st.error(f"Error fetching postulante info: {err}")
+                    return
+                
+                calificacion = st.slider("**Calificación (0-5)**", 0, 5, 0)
+                if st.button("Guardar calificación"):
+                    try:
+                        cursor.execute("UPDATE postulaciones SET calificación = %s WHERE id = %s", (calificacion, postulante_id))
+                        conexion.commit()
+                        st.success("Calificación guardada con éxito")
+                    except mysql.connector.Error as err:
+                        st.error(f"Error updating postulante calificación: {err}")
+                        return
+                
+                if postulante_select != "Ninguno":
+                    # Obtener el path del archivo cv del postulante seleccionado
+                    try:
+                        cursor.execute("SELECT cv FROM postulaciones WHERE id = %s", (postulante_id,))
+                        cv_path = cursor.fetchone()[0]
+                    except mysql.connector.Error as err:
+                        st.error(f"Error fetching cv path: {err}")
+                        return
+
+                    # Leer el archivo cv desde la carpeta cv
+                    try:
+                        with open(f"{cv_path}", "rb") as f:
+                            cv_file = f.read()
+                    except FileNotFoundError:
+                        st.error("Archivo cv no encontrado")
+                        return
+                    except Exception as err:
+                        st.error(f"Error reading cv file: {err}")
+                        return
+                    
+                    # Crear un botón para descargar el archivo cv
+                    if st.download_button("Descargar CV", data=cv_file, file_name=f"{postulante_info[2]}_cv.pdf", mime="application/pdf"):
+                        try:
+                            st.success("Archivo cv descargado con éxito")
+                        except Exception as err:
+                            st.error(f"Error downloading cv file: {err}")
+                            return
+
+    except Exception as err:
+        st.error(f"Error inesperado: {err}")
+        return
+    
 
 def formularioContacto():
     st.title("Formulario de contacto")  # El titulo
@@ -465,13 +583,23 @@ def dashboard():
             try:
                 if postulante[6]:
                     respuestas = json.loads(postulante[6].decode("utf-8"))
+                else:
+                    respuestas = {}
+                if postulante[7]:
+                    puntaje = postulante[7]
+                else:
+                    puntaje = 0
             except json.JSONDecodeError as e:
                 st.write(f"Error al decodificar JSON: {e}")
-            st.write(f"Nombre: {postulante[2]} - contacto: {postulante[3]} y {postulante[4]} \n Respuestas a la prueba:")
+            st.write(f"Nombre: {postulante[2]} - puntaje: {puntaje} - contacto: {postulante[3]} y {postulante[4]} \n Respuestas a la prueba:")
             if respuestas:
                 for key, value in respuestas.items():
                     st.write(f"{key}: {value}")
                 respuestas = []
+            else:
+                st.write("No hay respuestas")
+            
+            st.write("---")
 
         
     else:
@@ -480,7 +608,7 @@ def dashboard():
 def main():
     st.sidebar.title("Menu")
     if "username" in st.session_state:
-        menu_option = st.sidebar.selectbox("Selecciona una opción", ["Dashboard", "Vacantes","Entrevistas","Configurar E-mail","Pruebas", "Contacto con el postulante (E-mail)"])
+        menu_option = st.sidebar.selectbox("Selecciona una opción", ["Dashboard", "Vacantes","Entrevistas","Configurar E-mail","Pruebas", "Contacto con el postulante (E-mail)", "Seguimiento de candidatos"])
     else:
         menu_option = st.sidebar.selectbox("Selecciona una aplicación", ["Iniciar sesión", "Registro"])
 
@@ -500,6 +628,8 @@ def main():
         pruebas()
     elif menu_option == "Contacto con el postulante (E-mail)":
         formularioContacto()
+    elif menu_option == "Seguimiento de candidatos":
+        seguimientoCandidatos()
 
 
 if __name__ == "__main__":

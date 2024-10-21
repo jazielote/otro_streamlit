@@ -181,12 +181,14 @@ def ver_entrevistas():
     eventos = []
     for entrevista in entrevistas:
         id_postulante = entrevista[1].decode('utf-8')
+        st.info(f"Postulante: {id_postulante}")
         query_postulante = "SELECT * FROM postulaciones WHERE vacante_id = %s"
         cursor.execute(query_postulante, (id_postulante,))
-        if cursor.rowcount == 0:
-            st.error("No se encontro el postulante")
+        results = cursor.fetchall()
+        if results:
+            postulante = results[0]
         else:
-            postulante = cursor.fetchone()
+            st.error("No se encontró el postulante")
 
         evento = {
             'title': postulante[2],

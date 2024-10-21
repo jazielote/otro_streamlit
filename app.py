@@ -183,7 +183,10 @@ def ver_entrevistas():
         id_postulante = entrevista[1].decode('utf-8')
         query_postulante = "SELECT * FROM postulaciones WHERE vacante_id = %s"
         cursor.execute(query_postulante, (id_postulante,))
-        postulante = cursor.fetchone()
+        if cursor.rowcount == 0:
+            st.error("No se encontro el postulante")
+        else:
+            postulante = cursor.fetchone()
 
         evento = {
             'title': postulante[2],

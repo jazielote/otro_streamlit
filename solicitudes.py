@@ -27,7 +27,10 @@ vacante_id = st.query_params.get("vacante_id", [None])
 
 cursor.execute("SELECT * FROM pruebas WHERE vacante_id = %s", (vacante_id,))
 prueba = cursor.fetchall()
-prueba = json.loads(prueba[0][1])
+if prueba:
+    prueba = json.loads(prueba[0][1])
+else:
+    prueba = None
 
 # Función para mostrar la prueba y guardar las respuestas
 def mostrar_prueba(prueba):

@@ -131,23 +131,24 @@ def vacantes():
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 values = (
-                    Uuid, 
-                    userid, 
-                    titulo, 
-                    descripcion, 
-                    ubicacion, 
-                    salario, 
-                    fecha_publicacion, 
-                    fecha_cierre, 
-                    tipo_contrato, 
-                    experiencia_requerida, 
-                    educacion_requerida, 
+                    Uuid,
+                    userid,
+                    titulo,
+                    descripcion,
+                    ubicacion,
+                    salario,
+                    fecha_publicacion,
+                    fecha_cierre,
+                    tipo_contrato,
+                    experiencia_requerida,
+                    educacion_requerida,
                     habilidades_requeridas
                 )
                 cursor.execute(query, values)
                 conexion.commit()
                 if cursor.rowcount == 1:
                     st.success("Vacante registrada correctamente")
+                    st.code(f"http://3.129.6.32:8502/?vacante_id={Uuid[:16]}")
                 else:
                     st.error("No se pudo registrar la vacante")
     else:
@@ -180,8 +181,8 @@ def ver_entrevistas():
     # Preparando los eventos para el calendario
     eventos = []
     for entrevista in entrevistas:
-        id_postulante = entrevista[1].decode('utf-8')
-        query_postulante = "SELECT * FROM postulaciones WHERE vacante_id = %s"
+        id_postulante = entrevista[2]
+        query_postulante = "SELECT * FROM postulaciones WHERE id = %s"
         cursor.execute(query_postulante, (id_postulante,))
         results = cursor.fetchall()
         if results:
@@ -467,7 +468,6 @@ def entrevistas():
         # Obteniendo el id de la postulación seleccionada
         if postulaciones_select:
             postulacion_id = [postulacion[0] for postulacion in postulaciones if postulacion[2] == postulaciones_select][0]
-        
         fecha = st.date_input("Fecha de la entrevista")
         
         Uuid = str(uuid.uuid4())

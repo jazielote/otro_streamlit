@@ -53,10 +53,6 @@ def register():
         
         if cursor.rowcount == 1:
             st.success("Usuario registrado correctamente")
-            st.session_state["username"] = nombre
-            st.session_state["userid"] = Uuid
-            st.rerun()
-            dashboard()
         else:
             st.error("No se pudo registrar el usuario")
 
@@ -165,43 +161,51 @@ def ver_entrevistas():
     # Ejecutando la consulta para obtener las vacantes del usuario
     query = "SELECT * FROM vacantes WHERE `iduser` = %s"
     cursor.execute(query, (userid,))
-    vacantes = cursor.fetchall()
+    if cursor.rowcount == 0:
+        st.warning("No hay vacantes disponibles")
+        vacantes = None
+    else:
+        vacantes = cursor.fetchall()
 
     # Creando un cuadro de selección con los datos obtenidos
-    vacantes_select = st.selectbox("Vacante seleccionada", [vacante[2] for vacante in vacantes])
-
-    # Obteniendo el id de la vacante seleccionada
-    vacante_id = [vacante[0] for vacante in vacantes if vacante[2] == vacantes_select][0]
+    vacantes_select = st.selectbox("Vacante seleccionada", ["Ninguno"] + [vacante[2] for vacante in vacantes])
     
-    # Ejecutando la consulta para obtener las postulaciones de la vacante seleccionada
-    query_postulaciones = "SELECT * FROM entrevistas WHERE `vacante_id` = %s"
-    cursor.execute(query_postulaciones, (vacante_id,))
-    entrevistas = cursor.fetchall()
+    if vacantes_select == "Ninguno":
+        st.warning("No hay ninguna vacante seleccionada")
+    else:
 
-    # Preparando los eventos para el calendario
-    eventos = []
-    for entrevista in entrevistas:
-        id_postulante = entrevista[2]
-        query_postulante = "SELECT * FROM postulaciones WHERE id = %s"
-        cursor.execute(query_postulante, (id_postulante,))
-        results = cursor.fetchall()
-        if results:
-            postulante = results[0]
-        else:
-            st.error("No se encontró el postulante")
+        # Obteniendo el id de la vacante seleccionada
+        vacante_id = [vacante[0] for vacante in vacantes if vacante[2] == vacantes_select][0]
+        
+        # Ejecutando la consulta para obtener las postulaciones de la vacante seleccionada
+        query_postulaciones = "SELECT * FROM entrevistas WHERE `vacante_id` = %s"
+        cursor.execute(query_postulaciones, (vacante_id,))
+        entrevistas = cursor.fetchall()
 
-        evento = {
-            'title': postulante[2],
-            "start": entrevista[3].strftime("%Y-%m-%dT%H:%M:%S"),  # Convertir datetime a string
-            "end": entrevista[3].strftime("%Y-%m-%dT%H:%M:%S")  # Convertir datetime a string
-        }
-        eventos.append(evento)
-    
-    # Cerrando el cursor
-    cursor.close()
-    
-    # Mostrando el calendario
-    st.write(calendar(events=eventos))
+        # Preparando los eventos para el calendario
+        eventos = []
+        for entrevista in entrevistas:
+            id_postulante = entrevista[2]
+            query_postulante = "SELECT * FROM postulaciones WHERE id = %s"
+            cursor.execute(query_postulante, (id_postulante,))
+            results = cursor.fetchall()
+            if results:
+                postulante = results[0]
+            else:
+                st.error("No se encontró el postulante")
+
+            evento = {
+                'title': postulante[2],
+                "start": entrevista[3].strftime("%Y-%m-%dT%H:%M:%S"),  # Convertir datetime a string
+                "end": entrevista[3].strftime("%Y-%m-%dT%H:%M:%S")  # Convertir datetime a string
+            }
+            eventos.append(evento)
+        
+        # Cerrando el cursor
+        cursor.close()
+        
+        # Mostrando el calendario
+        st.write(calendar(events=eventos))
 
 
 def configurarEmail():

@@ -412,14 +412,21 @@ def formularioContacto():
 
     # Obtener el correo electrónico del postulante
     try:
-        cursor.execute("SELECT email FROM postulaciones")
-        postulanteEmails = cursor.fetchall()
+        emails = []
+        cursor.execute("SELECT * FROM vacantes WHERE iduser = %s", (st.session_state["userid"],))
+        if cursor.rowcount == 1:
+            vacantes = cursor.fetchall()
+            for i in vacantes:
+                cursor.execute("SELECT email FROM postulaciones WHERE vacante_id = %s", (i[0],))
+                postulanteEmails = cursor.fetchall()
+                for j in postulanteEmails:
+                    emails.append(j[0])
     except Exception as e:
         st.error(f"Error al obtener la información de los postulantes: {e}")
         return
 
     # Select box para elegir el mail del postulante
-    opcionesPostulantes = ["Ninguno"] + [email[0] for email in postulanteEmails]
+    opcionesPostulantes = ["Ninguno"] + [email[0] for email in emails]
 
     # Donde se llena el formulario (asunto, mensaje y correo del postulante) de contacto
     with st.form(key="formulario"):
@@ -456,65 +463,65 @@ def entrevistas():
         vacantes = cursor.fetchall()
 
         # Creando un cuadro de selección con los datos obtenidos
-        vacantes_select = st.selectbox("Vacante", [vacante[2] for vacante in vacantes])
-        if vacantes_select:
+        vacantes_select = st.selectbox("Vacante", ["Ninguno"]+[vacante[2] for vacante in vacantes])
+        if vacantes_select != "Ninguno":
         # Obteniendo el id de la vacante seleccionada
             vacante_id = [vacante[0] for vacante in vacantes if vacante[2] == vacantes_select][0]
 
-        # Ejecutando la consulta para obtener las postulaciones de la vacante seleccionada
-        query_postulaciones = "SELECT * FROM postulaciones WHERE `vacante_id` = %s"
-        cursor.execute(query_postulaciones, (vacante_id,))
-        postulaciones = cursor.fetchall()
+            # Ejecutando la consulta para obtener las postulaciones de la vacante seleccionada
+            query_postulaciones = "SELECT * FROM postulaciones WHERE `vacante_id` = %s"
+            cursor.execute(query_postulaciones, (vacante_id,))
+            postulaciones = cursor.fetchall()
+                
+            # Creando un select con las postulaciones obtenidas
+            postulaciones_select = st.selectbox("Postulación", [postulacion[2] for postulacion in postulaciones])
+
+            # Obteniendo el id de la postulación seleccionada
+            if postulaciones_select:
+                postulacion_id = [postulacion[0] for postulacion in postulaciones if postulacion[2] == postulaciones_select][0]
+            fecha = st.date_input("Fecha de la entrevista")
             
-        # Creando un select con las postulaciones obtenidas
-        postulaciones_select = st.selectbox("Postulación", [postulacion[2] for postulacion in postulaciones])
+            Uuid = str(uuid.uuid4())
 
-        # Obteniendo el id de la postulación seleccionada
-        if postulaciones_select:
-            postulacion_id = [postulacion[0] for postulacion in postulaciones if postulacion[2] == postulaciones_select][0]
-        fecha = st.date_input("Fecha de la entrevista")
-        
-        Uuid = str(uuid.uuid4())
+            # Agendando la entrevista
+            if st.button("Agendar"):
+                cursor.execute("INSERT INTO entrevistas (id, vacante_id, postulacion_id, fecha) VALUES (%s, %s, %s, %s)", (Uuid, vacante_id, postulacion_id, fecha))
+                conexion.commit()
+                if cursor.rowcount == 1:
+                    st.success("Entrevista agendada correctamente")
+                    cursor.execute("SELECT * FROM users WHERE id = %s", (userid,))
+                    user = cursor.fetchone()
+                    cursor.execute("SELECt * FROM postulaciones WHERE id = %s", (postulacion_id,))
+                    postulacion = cursor.fetchone()
+                    destinatario = postulacion[3]
+                    remitente = user[5]
+                    password = user[6]
+                    asunto = f"Confirmación de Entrevista para el Puesto de {vacantes_select}"
+                    cuerpo = f"""
+                    Estimado/a {postulaciones_select},
 
-        # Agendando la entrevista
-        if st.button("Agendar"):
-            cursor.execute("INSERT INTO entrevistas (id, vacante_id, postulacion_id, fecha) VALUES (%s, %s, %s, %s)", (Uuid, vacante_id, postulacion_id, fecha))
-            conexion.commit()
-            if cursor.rowcount == 1:
-                st.success("Entrevista agendada correctamente")
-                cursor.execute("SELECT * FROM users WHERE id = %s", (userid,))
-                user = cursor.fetchone()
-                cursor.execute("SELECt * FROM postulaciones WHERE id = %s", (postulacion_id,))
-                postulacion = cursor.fetchone()
-                destinatario = postulacion[3]
-                remitente = user[5]
-                password = user[6]
-                asunto = f"Confirmación de Entrevista para el Puesto de {vacantes_select}"
-                cuerpo = f"""
-                Estimado/a {postulaciones_select},
+                    Espero que este mensaje le encuentre bien.
 
-                Espero que este mensaje le encuentre bien.
+                    Nos complace informarle que hemos revisado su solicitud para el puesto de {vacantes_select} y nos gustaría invitarle a una entrevista para discutir su candidatura con más detalle.
 
-                Nos complace informarle que hemos revisado su solicitud para el puesto de {vacantes_select} y nos gustaría invitarle a una entrevista para discutir su candidatura con más detalle.
+                    Detalles de la entrevista:
 
-                Detalles de la entrevista:
+                    Fecha: {fecha}
+                    Por favor, confirme su disponibilidad respondiendo a este correo a la mayor brevedad posible. Si tiene alguna pregunta o necesita reprogramar la entrevista, no dude en comunicarse con nosotros.
 
-                Fecha: {fecha}
-                Por favor, confirme su disponibilidad respondiendo a este correo a la mayor brevedad posible. Si tiene alguna pregunta o necesita reprogramar la entrevista, no dude en comunicarse con nosotros.
+                    Agradecemos su interés en formar parte de nuestro equipo y esperamos conocerle pronto.
 
-                Agradecemos su interés en formar parte de nuestro equipo y esperamos conocerle pronto.
+                    Atentamente,
 
-                Atentamente,
+                    {user[1]}
+                    En caso de querer contactarnos, puede hacerlo a:
+                    {user[3]}
+                    {user[5]}
+                    """
+                    enviar_email(remitente, destinatario, asunto, cuerpo, password)
 
-                {user[1]}
-                En caso de querer contactarnos, puede hacerlo a:
-                {user[3]}
-                {user[5]}
-                """
-                enviar_email(remitente, destinatario, asunto, cuerpo, password)
-
-            else:
-                st.error("No se pudo agendar la entrevista")
+                else:
+                    st.error("No se pudo agendar la entrevista")
 
 def pruebas():
     st.title("Crear pruebas a los postulantes")
@@ -526,52 +533,53 @@ def pruebas():
 
     cursor.execute("SELECT * FROM vacantes WHERE iduser = %s", (st.session_state["userid"],))
     vacantes = cursor.fetchall()
-    vacantes_select = st.selectbox("Vacante", [vacante[2] for vacante in vacantes])
-    vacante_id = [vacante[0] for vacante in vacantes if vacante[2] == vacantes_select][0]
+    vacantes_select = st.selectbox("Vacante", ["Ninguno"] + [vacante[2] for vacante in vacantes])
+    if vacantes_select != "Ninguno":
+        vacante_id = [vacante[0] for vacante in vacantes if vacante[2] == vacantes_select][0]
 
-    if st.button("Prueba"):
-        st.session_state["prueba_form"] = True
+        if st.button("Prueba"):
+            st.session_state["prueba_form"] = True
 
-    if st.session_state["prueba_form"]:
-        st.title("Prueba")
-        
-        with st.form(key="formulario"):
-            pregunta = st.text_input("Pregunta")
-            opciones = st.text_area("Opciones (separadas por comas)")
-            agregar_pregunta = st.form_submit_button(label="Agregar Pregunta")
+        if st.session_state["prueba_form"]:
+            st.title("Prueba")
+            
+            with st.form(key="formulario"):
+                pregunta = st.text_input("Pregunta")
+                opciones = st.text_area("Opciones (separadas por comas)")
+                agregar_pregunta = st.form_submit_button(label="Agregar Pregunta")
 
-            if agregar_pregunta:
-                opciones_lista = opciones.split(',')
-                st.session_state["preguntas"].append({
-                    "pregunta": pregunta,
-                    "opciones": opciones_lista
-                })
-                st.success("Pregunta agregada")
+                if agregar_pregunta:
+                    opciones_lista = opciones.split(',')
+                    st.session_state["preguntas"].append({
+                        "pregunta": pregunta,
+                        "opciones": opciones_lista
+                    })
+                    st.success("Pregunta agregada")
 
-        if st.session_state["preguntas"]:
-            st.subheader("Preguntas añadidas")
-            for idx, pregunta in enumerate(st.session_state["preguntas"]):
-                st.write(f"Pregunta {idx + 1}: {pregunta['pregunta']}")
-                st.write("Opciones:")
-                for opcion in pregunta["opciones"]:
-                    st.write(f"- {opcion}")
+            if st.session_state["preguntas"]:
+                st.subheader("Preguntas añadidas")
+                for idx, pregunta in enumerate(st.session_state["preguntas"]):
+                    st.write(f"Pregunta {idx + 1}: {pregunta['pregunta']}")
+                    st.write("Opciones:")
+                    for opcion in pregunta["opciones"]:
+                        st.write(f"- {opcion}")
 
-        if st.button("Guardar Prueba"):
-            prueba_id = str(uuid.uuid4())
-            prueba_json = {
-                "id": prueba_id,
-                "vacante_id": vacante_id,
-                "preguntas": st.session_state["preguntas"]
-            }
-            prueba_json_str = json.dumps(prueba_json, default=str)  # Convertir a cadena JSON
-            cursor.execute("INSERT INTO pruebas (vacante_id, prueba) VALUES (%s, %s)", (vacante_id, prueba_json_str))
-            conexion.commit()
-            if cursor.rowcount == 1:
-                st.success("Prueba guardada correctamente")
-            else:
-                st.error("No se pudo guardar la prueba")
-            st.session_state["preguntas"] = []
-            st.session_state["prueba_form"] = False
+            if st.button("Guardar Prueba"):
+                prueba_id = str(uuid.uuid4())
+                prueba_json = {
+                    "id": prueba_id,
+                    "vacante_id": vacante_id,
+                    "preguntas": st.session_state["preguntas"]
+                }
+                prueba_json_str = json.dumps(prueba_json, default=str)  # Convertir a cadena JSON
+                cursor.execute("INSERT INTO pruebas (vacante_id, prueba) VALUES (%s, %s)", (vacante_id, prueba_json_str))
+                conexion.commit()
+                if cursor.rowcount == 1:
+                    st.success("Prueba guardada correctamente")
+                else:
+                    st.error("No se pudo guardar la prueba")
+                st.session_state["preguntas"] = []
+                st.session_state["prueba_form"] = False
 
 def dashboard():
     if "username" in st.session_state:
